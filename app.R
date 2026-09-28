@@ -31,7 +31,7 @@ APP_ASSET_VERSION <- as.integer(Sys.time())
 # staging branch each carry their own value directly instead -- FALSE here on
 # master, TRUE on the staging branch -- since that deploy is git-branch-driven
 # rather than script-driven.
-SHOW_MERGER_SIMULATOR <- FALSE
+SHOW_MERGER_SIMULATOR <- TRUE
 
 NAV_ITEMS <- Filter(Negate(is.null), list(
   list(id = "countries", label = "Countries", icon = "flag"),
