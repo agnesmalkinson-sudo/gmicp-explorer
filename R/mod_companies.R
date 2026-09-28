@@ -22,24 +22,6 @@ mod_companies_ui <- function(id) {
       ),
       uiOutput(ns("profile_sections"))
     ),
-    div(class = "panel-card panel-card-wide map-card",
-      h3(class = "panel-title", "Filter by country"),
-      p(class = "panel-note",
-        "Click a country on the map, or search below, to rank leading companies within that country instead of ",
-        "worldwide. The map always shows figures in US dollars, for comparability."),
-      div(class = "panel-toolbar",
-        uiOutput(ns("map_year_ui"))
-      ),
-      uiOutput(ns("map_sector_note")),
-      highchartOutput(ns("map"), height = "500px"),
-      div(class = "focus-row",
-        div(class = "focus-search",
-          tags$label(class = "filter-label", "Search for a country"),
-          uiOutput(ns("country_pick_ui"))
-        ),
-        uiOutput(ns("focus_hint"))
-      )
-    ),
     div(class = "panel-card panel-card-wide",
       uiOutput(ns("leaders_title")),
       uiOutput(ns("leaders_note")),
@@ -67,62 +49,13 @@ mod_companies_server <- function(id, data, all_countries, all_sectors, all_years
       if (is.null(s) || identical(s, "")) character(0) else s
     })
 
-    # ---------------- Country map filter ----------------
-
-    output$map_year_ui <- renderUI({
-      selectInput(ns("map_year"), "Snapshot year", choices = rev(seq(all_years[1], all_years[2])),
-                  selected = min(DEFAULT_SNAPSHOT_YEAR, all_years[2]), width = "160px")
-    })
-
-    output$map_sector_note <- renderUI({
-      if (length(sector_sel()) == 0) {
-        div(class = "panel-scope-note", "Using the Sectors filter above. Currently: all sectors (revenue is summed).")
-      } else {
-        div(class = "panel-scope-note", paste0("Using the Sectors filter above. Currently: ", paste(sector_sel(), collapse = ", "), "."))
-      }
-    })
-
-    output$map <- renderHighchart({
-      req(input$map_year)
-      build_country_map(data, "revenue", sector_sel(), as.numeric(input$map_year), ns("map_click"), categorical = TRUE)
-    })
-
-    observeEvent(input$map_click, {
-      key <- tolower(input$map_click$key %||% "")
-      matched <- ISO2_TO_COUNTRY[[key]]
-      if (is.null(matched)) return(invisible(NULL))
-      updateSelectizeInput(session, "country_pick", selected = matched)
-    })
-
     WORLDWIDE <- "__worldwide__"
 
-    output$country_pick_ui <- renderUI({
-      selectizeInput(ns("country_pick"), NULL, choices = c("Worldwide (all countries)" = WORLDWIDE, all_countries),
-                      selected = WORLDWIDE, multiple = FALSE, options = list(placeholder = "Type a country name..."))
-    })
-
-    output$focus_hint <- renderUI({
-      if (is.null(input$country_pick) || !nzchar(input$country_pick) || input$country_pick == WORLDWIDE) {
-        div(class = "focus-hint", "Showing worldwide — click the map or search above to narrow to one country.")
-      } else {
-        div(class = "focus-hint", paste0("Showing: ", input$country_pick, " "),
-            actionLink(ns("clear_country_filter"), "Back to worldwide", class = "focus-hint-clear"))
-      }
-    })
-
-    observeEvent(input$clear_country_filter, updateSelectizeInput(session, "country_pick", selected = WORLDWIDE))
-
-    leader_country <- reactive({
-      c <- input$country_pick
-      if (is.null(c) || !nzchar(c) || c == WORLDWIDE) character(0) else c
-    })
-
-    # ---------------- Company profile's own country filter ----------------
-    # Independent of the "Filter by country" map below (which scopes the map
-    # and "Leading companies" leaderboard) -- the profile card sits above that
-    # map now, so it needs its own scope for the company search list and the
-    # Rank chart rather than depending on a filter the user hasn't seen yet.
-    # Same Worldwide-default pattern as the map's picker.
+    # ---------------- Company profile's country filter ----------------
+    # The one country filter for this whole page -- scopes the profile's
+    # company search and Rank chart below, and (via profile_country(), used
+    # in place of a separate map-driven filter) the "Leading companies"
+    # leaderboard too.
 
     output$profile_country_pick_ui <- renderUI({
       selectizeInput(ns("profile_country_pick"), NULL, choices = c("Worldwide (all countries)" = WORLDWIDE, all_countries),
@@ -148,7 +81,7 @@ mod_companies_server <- function(id, data, all_countries, all_sectors, all_years
     # ---------------- Leading companies ----------------
 
     output$leaders_title <- renderUI({
-      txt <- if (length(leader_country()) == 0) "Leading companies worldwide" else paste0("Leading companies in ", leader_country())
+      txt <- if (length(profile_country()) == 0) "Leading companies worldwide" else paste0("Leading companies in ", profile_country())
       h3(class = "panel-title", txt)
     })
 
@@ -157,7 +90,7 @@ mod_companies_server <- function(id, data, all_countries, all_sectors, all_years
         p(class = "panel-note",
           "Comparing the years picked below — each company's bar is grouped by year instead of stacked by country ",
           "or sector, ranked by its total revenue across those years combined.")
-      } else if (length(leader_country()) == 0) {
+      } else if (length(profile_country()) == 0) {
         stack_by <- input$worldwide_stack_by %||% "Country"
         stack_desc <- if (stack_by == "Country") "the countries that company reports revenue in" else "sector"
         p(class = "panel-note",
@@ -171,22 +104,21 @@ mod_companies_server <- function(id, data, all_countries, all_sectors, all_years
     })
 
     output$stack_by_ui <- renderUI({
-      req(length(leader_country()) == 0, !isTRUE(input$compare_years))
+      req(length(profile_country()) == 0, !isTRUE(input$compare_years))
       radioButtons(ns("worldwide_stack_by"), "Stack bars by", c("Country" = "Country", "Sector" = "Sector"),
                    selected = "Country", inline = TRUE)
     })
 
     base_filtered <- reactive({
-      d <- apply_filters(data$unified, leader_country(), sector_sel(), gf$years())
+      d <- apply_filters(data$unified, profile_country(), sector_sel(), gf$years())
       if (isTRUE(input$exclude_others) && "is_aggregate" %in% names(d)) d <- d[!d$is_aggregate, , drop = FALSE]
       d[!is.na(d$parent) & d$parent != "nan" & d$parent != "", , drop = FALSE]
     })
 
-    # Same shape as base_filtered() above, but scoped by the profile card's
-    # own country filter instead of the map's -- used only by the profile's
-    # Rank chart, which now sits in a card above the map/leaderboard. Always
-    # excludes "Others" aggregate rows (no separate toggle for this card;
-    # TRUE was base_filtered()'s original default too).
+    # Same shape as base_filtered() above (and now the same country source
+    # too), used only by the profile's Rank chart -- kept separate because it
+    # always excludes "Others" aggregate rows, with no toggle of its own the
+    # way the leaderboard's checkbox provides for base_filtered().
     profile_base_filtered <- reactive({
       d <- apply_filters(data$unified, profile_country(), sector_sel(), gf$years())
       if ("is_aggregate" %in% names(d)) d <- d[!d$is_aggregate, , drop = FALSE]
@@ -233,7 +165,7 @@ mod_companies_server <- function(id, data, all_countries, all_sectors, all_years
         # Worldwide, stack each company's bar by country (or sector, via the
         # "Stack bars by" toggle); narrowed to one country, stacking by country
         # would just be a single solid segment, so it's always sector there.
-        stack_col <- if (length(leader_country()) == 0) (input$worldwide_stack_by %||% "Country") else "Sector"
+        stack_col <- if (length(profile_country()) == 0) (input$worldwide_stack_by %||% "Country") else "Sector"
         s %>% filter(parent %in% top_parents) %>%
           group_by(parent, .data[[stack_col]]) %>% summarise(value = sum(.data[[rc]], na.rm = TRUE), .groups = "drop") %>%
           rename(!!rc := value) -> agg
@@ -271,7 +203,7 @@ mod_companies_server <- function(id, data, all_countries, all_sectors, all_years
 
     output$dl_leaders <- downloadHandler(
       filename = function() {
-        scope <- if (length(leader_country()) == 0) "worldwide" else gsub(" ", "_", leader_country())
+        scope <- if (length(profile_country()) == 0) "worldwide" else gsub(" ", "_", profile_country())
         yr_part <- if (isTRUE(input$compare_years)) paste(input$leader_years, collapse = "-") else input$leader_year
         paste0("gmicp_leading_companies_", scope, "_", yr_part, ".csv")
       },
@@ -305,12 +237,15 @@ mod_companies_server <- function(id, data, all_countries, all_sectors, all_years
 
     output$profile_note <- renderUI({
       if (length(profile_country()) == 0) {
-        p(class = "panel-note", "Search for a company to see where it operates and how its revenue has changed over time.")
+        p(class = "panel-note",
+          "Search for a company to see where it operates and how its revenue has changed over time. This country ",
+          "filter also scopes the \"Leading companies\" ranking below.")
       } else {
         p(class = "panel-note",
           "Only showing companies with a presence in the country selected above (respecting the Sectors and Years ",
-          "filters too). Once selected, the profile below still shows that company's full footprint across every ",
-          "country it operates in — pick \"Back to worldwide\" above to search all companies again.")
+          "filters too) — this also narrows \"Leading companies\" below to the same country. Once a company is ",
+          "selected, its profile still shows that company's full footprint across every country it operates in — ",
+          "pick \"Back to worldwide\" above to search all companies again.")
       }
     })
 
