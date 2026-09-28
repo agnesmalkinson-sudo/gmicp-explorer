@@ -26,10 +26,12 @@ APP_ALL_YEARS <- range(c(APP_DATA$revenue$Year, APP_DATA$unified$Year, APP_DATA$
 APP_ASSET_VERSION <- as.integer(Sys.time())
 
 # Flipped to FALSE for the production deploy only (see deploy.R, which
-# temporarily patches this line before deploying and restores it after) --
-# the working copy and staging default to TRUE so it stays visible there
-# while it's still being iterated on.
-SHOW_MERGER_SIMULATOR <- TRUE
+# temporarily patches this line before deploying and restores it after, for
+# the shinyapps.io deploy path). On Connect Cloud, master/production and the
+# staging branch each carry their own value directly instead -- FALSE here on
+# master, TRUE on the staging branch -- since that deploy is git-branch-driven
+# rather than script-driven.
+SHOW_MERGER_SIMULATOR <- FALSE
 
 NAV_ITEMS <- Filter(Negate(is.null), list(
   list(id = "countries", label = "Countries", icon = "flag"),
