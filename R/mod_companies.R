@@ -6,6 +6,22 @@ library(bsicons)
 mod_companies_ui <- function(id) {
   ns <- NS(id)
   tagList(
+    div(class = "panel-card panel-card-wide",
+      uiOutput(ns("profile_title")),
+      uiOutput(ns("profile_note")),
+      div(class = "focus-row",
+        div(class = "focus-search",
+          tags$label(class = "filter-label", "Filter by country"),
+          uiOutput(ns("profile_country_pick_ui"))
+        ),
+        uiOutput(ns("profile_focus_hint"))
+      ),
+      div(class = "filter-group", style = "max-width: 360px;",
+        tags$label(class = "filter-label", "Search for a company"),
+        uiOutput(ns("company_pick_ui"))
+      ),
+      uiOutput(ns("profile_sections"))
+    ),
     div(class = "panel-card panel-card-wide map-card",
       h3(class = "panel-title", "Filter by country"),
       p(class = "panel-note",
@@ -36,15 +52,6 @@ mod_companies_ui <- function(id) {
       ),
       uiOutput(ns("chart_leaders_ui")),
       downloadButton(ns("dl_leaders"), "Download chart data (CSV)", class = "dl-btn")
-    ),
-    div(class = "panel-card panel-card-wide",
-      uiOutput(ns("profile_title")),
-      uiOutput(ns("profile_note")),
-      div(class = "filter-group", style = "max-width: 360px;",
-        tags$label(class = "filter-label", "Search for a company"),
-        uiOutput(ns("company_pick_ui"))
-      ),
-      uiOutput(ns("profile_sections"))
     )
   )
 }
@@ -110,6 +117,34 @@ mod_companies_server <- function(id, data, all_countries, all_sectors, all_years
       if (is.null(c) || !nzchar(c) || c == WORLDWIDE) character(0) else c
     })
 
+    # ---------------- Company profile's own country filter ----------------
+    # Independent of the "Filter by country" map below (which scopes the map
+    # and "Leading companies" leaderboard) -- the profile card sits above that
+    # map now, so it needs its own scope for the company search list and the
+    # Rank chart rather than depending on a filter the user hasn't seen yet.
+    # Same Worldwide-default pattern as the map's picker.
+
+    output$profile_country_pick_ui <- renderUI({
+      selectizeInput(ns("profile_country_pick"), NULL, choices = c("Worldwide (all countries)" = WORLDWIDE, all_countries),
+                      selected = WORLDWIDE, multiple = FALSE, options = list(placeholder = "Type a country name..."))
+    })
+
+    output$profile_focus_hint <- renderUI({
+      if (is.null(input$profile_country_pick) || !nzchar(input$profile_country_pick) || input$profile_country_pick == WORLDWIDE) {
+        div(class = "focus-hint", "Showing worldwide — search above to narrow to one country.")
+      } else {
+        div(class = "focus-hint", paste0("Showing: ", input$profile_country_pick, " "),
+            actionLink(ns("clear_profile_country_filter"), "Back to worldwide", class = "focus-hint-clear"))
+      }
+    })
+
+    observeEvent(input$clear_profile_country_filter, updateSelectizeInput(session, "profile_country_pick", selected = WORLDWIDE))
+
+    profile_country <- reactive({
+      c <- input$profile_country_pick
+      if (is.null(c) || !nzchar(c) || c == WORLDWIDE) character(0) else c
+    })
+
     # ---------------- Leading companies ----------------
 
     output$leaders_title <- renderUI({
@@ -144,6 +179,17 @@ mod_companies_server <- function(id, data, all_countries, all_sectors, all_years
     base_filtered <- reactive({
       d <- apply_filters(data$unified, leader_country(), sector_sel(), gf$years())
       if (isTRUE(input$exclude_others) && "is_aggregate" %in% names(d)) d <- d[!d$is_aggregate, , drop = FALSE]
+      d[!is.na(d$parent) & d$parent != "nan" & d$parent != "", , drop = FALSE]
+    })
+
+    # Same shape as base_filtered() above, but scoped by the profile card's
+    # own country filter instead of the map's -- used only by the profile's
+    # Rank chart, which now sits in a card above the map/leaderboard. Always
+    # excludes "Others" aggregate rows (no separate toggle for this card;
+    # TRUE was base_filtered()'s original default too).
+    profile_base_filtered <- reactive({
+      d <- apply_filters(data$unified, profile_country(), sector_sel(), gf$years())
+      if ("is_aggregate" %in% names(d)) d <- d[!d$is_aggregate, , drop = FALSE]
       d[!is.na(d$parent) & d$parent != "nan" & d$parent != "", , drop = FALSE]
     })
 
@@ -234,30 +280,31 @@ mod_companies_server <- function(id, data, all_countries, all_sectors, all_years
 
     # ---------------- Company profile ----------------
 
-    # Scoped to the map's selected country (and the global Sector/Years filters), so
-    # the search box only offers companies actually present there. Once a company is
-    # picked, its own profile below still shows its full worldwide footprint --
-    # narrowing this list is about *finding* the company, not restricting its data.
-    # Excludes rows with no revenue figure at all (same reasoning as co_data() below:
-    # a company shouldn't be offered here on the strength of a non-revenue row alone,
-    # e.g. an audience/ownership record with no $ figure) -- otherwise picking it just
-    # lands on "No revenue data for this company." Filtered on the currently selected
-    # currency column, matching what co_data() itself requires once a pick is made.
+    # Scoped to the profile card's own country filter (and the global Sector/Years
+    # filters), so the search box only offers companies actually present there. Once
+    # a company is picked, its own profile below still shows its full worldwide
+    # footprint -- narrowing this list is about *finding* the company, not
+    # restricting its data. Excludes rows with no revenue figure at all (same
+    # reasoning as co_data() below: a company shouldn't be offered here on the
+    # strength of a non-revenue row alone, e.g. an audience/ownership record with no
+    # $ figure) -- otherwise picking it just lands on "No revenue data for this
+    # company." Filtered on the currently selected currency column, matching what
+    # co_data() itself requires once a pick is made.
     all_parents <- reactive({
       rc <- rev_col()
-      d <- apply_filters(data$unified, leader_country(), sector_sel(), gf$years())
+      d <- apply_filters(data$unified, profile_country(), sector_sel(), gf$years())
       d <- d[!is.na(d[[rc]]) & !d$is_aggregate, , drop = FALSE]
       p <- d$parent
       sort(unique(p[!is.na(p) & p != "" & p != "nan"]))
     })
 
     output$profile_title <- renderUI({
-      txt <- if (length(leader_country()) == 0) "Company profile" else paste0("Company profile — Firms operating in ", leader_country())
+      txt <- if (length(profile_country()) == 0) "Company profile" else paste0("Company profile — Firms operating in ", profile_country())
       h3(class = "panel-title", txt)
     })
 
     output$profile_note <- renderUI({
-      if (length(leader_country()) == 0) {
+      if (length(profile_country()) == 0) {
         p(class = "panel-note", "Search for a company to see where it operates and how its revenue has changed over time.")
       } else {
         p(class = "panel-note",
@@ -304,7 +351,7 @@ mod_companies_server <- function(id, data, all_countries, all_sectors, all_years
     })
 
     observeEvent(all_parents(), {
-      ph <- if (length(leader_country()) == 0) "e.g. Comcast, Alphabet, News Corp..." else paste0("Companies active in ", leader_country(), "...")
+      ph <- if (length(profile_country()) == 0) "e.g. Comcast, Alphabet, News Corp..." else paste0("Companies active in ", profile_country(), "...")
       updateSelectizeInput(session, "company_pick", choices = all_parents(), selected = character(0),
                             server = TRUE, options = list(placeholder = ph))
     }, ignoreNULL = FALSE)
@@ -474,28 +521,29 @@ mod_companies_server <- function(id, data, all_countries, all_sectors, all_years
     )
 
     output$profile_rank_title <- renderUI({
-      txt <- if (length(leader_country()) == 0) "Rank — worldwide" else paste0("Rank — ", leader_country())
+      txt <- if (length(profile_country()) == 0) "Rank — worldwide" else paste0("Rank — ", profile_country())
       h4(class = "panel-title", txt)
     })
 
     output$profile_rank_year_ui <- renderUI({
       req(company())
-      yrs <- sort(unique(base_filtered()$Year), decreasing = TRUE)
+      yrs <- sort(unique(profile_base_filtered()$Year), decreasing = TRUE)
       req(length(yrs) > 0)
       default <- if (DEFAULT_SNAPSHOT_YEAR %in% yrs) DEFAULT_SNAPSHOT_YEAR else yrs[1]
       selectInput(ns("profile_rank_year"), "Year", choices = yrs, selected = default, width = "140px")
     })
 
-    # Same base universe as "Leading companies" above (country scope, Sectors
-    # filter, Years filter; "Others" and blank parents excluded) so a
-    # company's rank here always means the same thing as its position on that
-    # leaderboard. Top 20 by revenue for the selected year, with the searched
-    # company appended (if it's not already in the top 20) so it's always
-    # visible regardless of how far down it ranks.
+    # Same shape as "Leading companies" (Sectors/Years filters, "Others" and
+    # blank parents excluded), but scoped by the profile card's own country
+    # filter so a company's rank here always means the same thing as its
+    # position would on that leaderboard for the same country. Top 20 by
+    # revenue for the selected year, with the searched company appended (if
+    # it's not already in the top 20) so it's always visible regardless of
+    # how far down it ranks.
     profile_rank_snap <- reactive({
       req(company(), input$profile_rank_year)
       rc <- rev_col()
-      s <- base_filtered()[base_filtered()$Year == as.numeric(input$profile_rank_year), , drop = FALSE]
+      s <- profile_base_filtered()[profile_base_filtered()$Year == as.numeric(input$profile_rank_year), , drop = FALSE]
       s <- s[!is.na(s[[rc]]), , drop = FALSE]
       validate(need(nrow(s) > 0, paste0("No company revenue data for ", input$profile_rank_year, ".")))
       totals <- s %>% group_by(parent) %>% summarise(revenue = sum(.data[[rc]], na.rm = TRUE), .groups = "drop") %>%
