@@ -1,0 +1,345 @@
+:root {
+  --ink: #101014;
+  --muted: #86868c;
+  --line: #ececee;
+  --bg: #f2f2f4;
+  --card: #ffffff;
+  --accent: #4f46e5;
+  --accent-soft: #eeecfd;
+  --positive: #16a34a;
+  --positive-soft: #dcfce7;
+  --negative: #dc2626;
+  --negative-soft: #fee2e2;
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
+  --shadow-card: 0 1px 2px rgba(16, 16, 20, 0.04), 0 8px 24px rgba(16, 16, 20, 0.05);
+  --sans: 'Inter', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --heading: 'Manrope', 'Inter', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  /* Live height of the filter-crumbs strip when it's showing (see app.R's
+     ResizeObserver) -- 0px when it's absent, so .compare-banner below sits
+     right under the header either way instead of overlapping the crumbs. */
+  --crumbs-offset: 0px;
+}
+
+/* Bumps the base font size (default browser 16px) up a notch -- nearly every
+   text size in this stylesheet is set in rem, so this scales the whole app's
+   type proportionally instead of needing to touch every rule individually. */
+html { font-size: 17px; }
+html, body { height: 100%; }
+body {
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--bg);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-shell { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ---------- top nav (logo + page links + filters toggle + currency) ---------- */
+.top-nav {
+  height: 76px; flex: 0 0 76px; background: var(--card); border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 20;
+}
+.top-nav-inner {
+  height: 100%; display: flex; align-items: center; gap: 28px;
+  padding: 0 32px; max-width: 1640px; margin: 0 auto; box-sizing: border-box;
+}
+.top-nav-links { display: flex; align-items: center; gap: 4px; flex: 1 1 auto; flex-wrap: wrap; min-width: 0; }
+.top-nav-link {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-radius: var(--radius-sm);
+  color: var(--muted) !important; text-decoration: none !important;
+  font-size: 0.86rem; font-weight: 600; white-space: nowrap;
+}
+.top-nav-link:hover { background: #f6f6f8; color: var(--ink) !important; }
+.top-nav-link.active { background: var(--accent-soft); color: var(--accent) !important; }
+.top-nav-link svg { flex-shrink: 0; }
+
+.top-nav-actions { display: flex; align-items: center; gap: 20px; flex-shrink: 0; margin-left: auto; }
+.help-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: none; border: 1px solid var(--line); color: var(--muted);
+  cursor: pointer; padding: 0; flex-shrink: 0;
+}
+.help-btn:hover { background: var(--bg); color: var(--ink); border-color: var(--muted); }
+.filters-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: none; padding: 0; margin: 0;
+  font-size: 0.82rem; font-weight: 600; color: var(--accent); cursor: pointer;
+}
+.filters-toggle:hover { text-decoration: underline; }
+.filters-toggle.active { color: var(--ink); }
+
+/* Full-width crumb strip under the top nav -- sticky so it stays visible
+   under the header while scrolling, matching .compare-banner's top offset
+   (see below) since both sit directly under the 76px-tall header. */
+.filter-crumbs-bar {
+  position: sticky; top: 76px; z-index: 19;
+  background: var(--accent-soft); border-bottom: 1px solid var(--line);
+}
+.filter-crumbs-inner {
+  display: flex; align-items: center; gap: 7px;
+  max-width: 1640px; margin: 0 auto; padding: 8px 32px;
+  font-size: 0.78rem; font-weight: 600; color: var(--accent);
+}
+/* Collapsed (default): single line, ellipsis-truncated if it overflows.
+   Expanded (.filter-crumbs-bar.expanded, toggled by .filter-crumbs-toggle):
+   wraps and shows the full text instead of cutting it off. */
+.filter-crumbs-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filter-crumbs-bar.expanded .filter-crumbs-text { overflow: visible; text-overflow: clip; white-space: normal; }
+.filter-crumbs-toggle {
+  flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border: none; background: none; color: var(--accent);
+  cursor: pointer; padding: 0; opacity: 0.7;
+}
+.filter-crumbs-toggle:hover { opacity: 1; }
+.filter-crumbs-toggle svg { transition: transform 0.15s ease; }
+.filter-crumbs-toggle.expanded svg { transform: rotate(180deg); }
+
+.main-col { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+
+/* ---------- app footer ---------- */
+.app-footer {
+  flex: 0 0 auto; padding: 18px 32px; text-align: center;
+  font-size: 0.76rem; line-height: 1.5; color: var(--muted);
+  border-top: 1px solid var(--line); background: var(--card);
+}
+
+.currency-toggle { display: flex; align-items: center; gap: 10px; }
+.control-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 700; }
+.currency-toggle .shiny-options-group,
+.mode-toggle .shiny-options-group {
+  display: inline-flex; gap: 2px; margin: 0; padding: 3px; background: var(--bg); border-radius: 999px;
+}
+.currency-toggle .radio-inline,
+.mode-toggle .radio-inline {
+  margin: 0; padding: 7px 16px; border-radius: 999px; font-size: 0.82rem; font-weight: 600; color: var(--muted); cursor: pointer;
+}
+.currency-toggle input[type="radio"],
+.mode-toggle input[type="radio"] { display: none; }
+.currency-toggle .radio-inline:has(input:checked),
+.mode-toggle .radio-inline:has(input:checked) { background: var(--ink); color: #fff; }
+.mode-toggle { margin-bottom: 12px; }
+
+/* ---------- filter bar: collapsed by default, toggled open via the "Filters"
+   button in the top nav (plain JS class toggle -- see app.R). The inputs
+   inside keep their live Shiny bindings/values regardless of visibility. ---------- */
+.filter-bar {
+  display: none; align-items: flex-start; gap: 22px; flex-wrap: wrap;
+  padding: 16px 32px; max-width: 1640px; margin: 0 auto;
+  background: var(--card); border-bottom: 1px solid var(--line);
+}
+.filter-bar.open { display: flex; }
+.filter-group { display: flex; flex-direction: column; gap: 5px; }
+.filter-group .form-control, .filter-group .selectize-input { min-width: 220px; }
+.filter-year { min-width: 0; flex: 0 0 auto; padding-top: 2px; }
+/* Matches the height of a .filter-label + 5px gap above every other group's
+   control row, so the Reset link's own text lines up with them rather than
+   sitting higher. */
+.filter-reset { justify-content: center; padding-top: 20px; }
+.filter-reset a { color: var(--accent); font-size: 0.82rem; font-weight: 600; text-decoration: none; }
+.filter-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 700; }
+/* Filter-group label with an inline info-icon button or link beside it (e.g.
+   "Sector groups" + info icon, "Sector" + Select all). Centered, not
+   baseline-aligned, so an icon doesn't sit low relative to the label's
+   cap-height. */
+.filter-label-row { display: flex; align-items: center; gap: 6px; }
+.filter-select-all { margin-left: auto; color: var(--accent); font-weight: 600; text-decoration: none; font-size: 0.72rem; }
+
+/* keep any multi-select from ballooning when a lot of items are picked */
+.selectize-control.multi .selectize-input {
+  max-height: 74px; overflow-y: auto; padding: 5px 8px;
+}
+.selectize-input > div { margin: 2px 4px 2px 0; }
+/* Sector / Sector Groups are mutually exclusive -- selectize's own disable()
+   (see app.R) adds this class to the wrapper, not the hidden <select>. */
+.selectize-control.disabled .selectize-input { background: var(--bg); opacity: 0.6; cursor: not-allowed; }
+
+/* Two plain year dropdowns instead of a range slider -- easier to set
+   precisely than dragging slider handles. Both selects have no label of their
+   own (just the shared "Years" filter-label above the row), so they're the
+   same height and "to" sits centered between them without extra offsetting. */
+.year-range-row { display: flex; align-items: center; gap: 8px; }
+.year-range-row .form-control, .year-range-row .selectize-input { min-width: 90px !important; }
+.year-range-sep { color: var(--muted); font-size: 0.82rem; }
+
+/* Small circular "hide filters" button at the end of the open filter bar --
+   a closer, in-panel alternative to scrolling back up to the header's
+   Filters toggle (which this keeps in sync with; see app.R). */
+.filter-bar-hide {
+  margin-left: auto; align-self: center; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: none; border: 1px solid var(--line); color: var(--muted); cursor: pointer; padding: 0;
+}
+.filter-bar-hide:hover { background: var(--bg); color: var(--ink); border-color: var(--muted); }
+
+/* Small inline info-icon button next to a filter label (e.g. "Sector groups"),
+   distinct from .help-btn's circular top-nav styling. */
+.help-btn-inline {
+  width: 18px; height: 18px; border: none; color: var(--muted); background: none;
+}
+.help-btn-inline:hover { color: var(--accent); background: none; }
+
+/* ---------- map + focus picker ---------- */
+.map-card .panel-toolbar { margin-bottom: 8px; }
+.focus-row { display: flex; align-items: flex-start; gap: 20px; margin-top: 16px; flex-wrap: wrap; }
+.focus-search { min-width: 260px; flex: 0 0 320px; }
+.focus-search-label-row { display: flex; align-items: baseline; gap: 14px; margin-bottom: 4px; }
+.focus-search-label-row a { color: var(--accent); font-weight: 600; text-decoration: none; font-size: 0.78rem; }
+.focus-hint { flex: 1 1 260px; padding-top: 22px; font-size: 0.86rem; color: var(--muted); }
+.focus-hint-clear { color: var(--accent); font-weight: 600; text-decoration: none; }
+
+/* ---------- content ---------- */
+.content-area { padding: 28px 32px 56px 32px; max-width: 1640px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+
+/* position: fixed (not sticky) so it reliably stays put across the various nested
+   block/flex containers between it and the page root -- see .compare-banner-spacer
+   below, which reserves the equivalent space in normal flow so content doesn't jump
+   when the banner appears. top: 76px sits it right below the sticky top nav
+   (rather than at the very top of the viewport, which the nav itself occupies). */
+.compare-banner-spacer { height: 58px; }
+.compare-banner {
+  position: fixed; top: calc(76px + var(--crumbs-offset)); left: 0; right: 0; z-index: 18;
+  display: flex; align-items: center; gap: 10px;
+  background: var(--ink); color: #fff;
+  padding: 13px 32px;
+  box-shadow: 0 4px 16px rgba(16, 16, 20, 0.2);
+  font-size: 0.84rem;
+}
+.compare-banner-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compare-banner-exit { color: #fff !important; opacity: 0.75; font-weight: 600; text-decoration: none !important; flex-shrink: 0; }
+.compare-banner-exit:hover { opacity: 1; }
+
+.stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 20px; }
+.merger-share-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+.merger-share-col { min-width: 0; }
+.merger-result-block { margin-bottom: 24px; }
+.merger-result-block:last-child { margin-bottom: 0; }
+.stat-card {
+  background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--shadow-card);
+  padding: 20px 22px; min-width: 0;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.stat-card.stat-card-plain { background: transparent; box-shadow: none; padding: 0; }
+.stat-card-header { display: flex; align-items: flex-start; gap: 10px; }
+.stat-card-icon {
+  width: 30px; height: 30px; flex: 0 0 30px; border-radius: 9px; background: var(--bg); color: var(--accent);
+  display: flex; align-items: center; justify-content: center; margin-top: 1px;
+}
+.stat-card-text { min-width: 0; }
+.stat-card-detail { font-size: 0.78rem; color: var(--muted); }
+.stat-card-spark { width: 100%; height: 64px; margin-top: auto; }
+.stat-card-spark .html-widget, .stat-card-spark .highchart { width: 100% !important; height: 100% !important; }
+.stat-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 700; line-height: 1.3; }
+.stat-value { font-family: var(--heading); font-size: 1.4rem; font-weight: 800; color: var(--ink); line-height: 1.25; margin-top: 4px; overflow-wrap: break-word; }
+.stat-delta { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; vertical-align: middle; }
+.stat-delta.positive { background: var(--positive-soft); color: var(--positive); }
+.stat-delta.negative { background: var(--negative-soft); color: var(--negative); }
+
+.panel-card {
+  background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--shadow-card);
+  padding: 24px 26px; margin-bottom: 20px;
+}
+.panel-title { font-family: var(--heading); font-size: 1.05rem; font-weight: 800; margin: 0 0 6px 0; letter-spacing: -0.01em; }
+.panel-subtitle { font-size: 0.86rem; color: var(--muted); margin: -4px 0 14px 0; }
+.panel-note { color: var(--muted); font-size: 0.92rem; margin: 0 0 14px 0; max-width: 920px; line-height: 1.5; }
+.panel-scope-note { color: var(--muted); font-size: 0.88rem; margin: -8px 0 16px 0; }
+
+.panel-toolbar { display: flex; align-items: flex-end; gap: 18px; margin-bottom: 16px; flex-wrap: wrap; }
+.panel-toolbar-hint { color: var(--muted); font-size: 0.88rem; margin: 0; flex-basis: 100%; }
+
+.fill-note {
+  font-size: 0.88rem; color: #92620a; background: #fff8e8; border: none;
+  border-radius: var(--radius-sm); padding: 10px 14px; margin-top: 12px; display: flex; align-items: center; gap: 8px;
+}
+.concentration-legend { display: flex; flex-wrap: wrap; gap: 6px 20px; margin-top: 10px; }
+.concentration-legend-item { display: inline-flex; align-items: center; gap: 7px; font-size: 0.85rem; color: var(--muted); }
+.concentration-legend-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+.alert-note {
+  font-size: 0.9rem; color: #1c4a63; background: #eaf3fb; border: none;
+  border-radius: var(--radius-sm); padding: 11px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+}
+
+.dl-btn.btn {
+  margin-top: 10px; background: var(--bg); border: none; color: var(--ink);
+  font-size: 0.82rem; font-weight: 600; border-radius: 999px; padding: 8px 18px;
+}
+.dl-btn.btn:hover { background: var(--line); }
+
+.howto-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 13px; }
+.howto-list li { display: flex; align-items: flex-start; gap: 10px; font-size: 0.86rem; color: #333; line-height: 1.4; }
+.howto-list li svg { margin-top: 3px; flex-shrink: 0; color: var(--accent); }
+
+.about-card { max-width: 880px; }
+.about-card h4 { font-family: var(--heading); font-size: 1.02rem; margin: 26px 0 8px 0; }
+.about-card p, .about-card li { font-size: 0.9rem; line-height: 1.6; color: #333; }
+.about-card .license-note, .about-card .cite-note { font-size: 0.8rem; color: var(--muted); background: var(--bg); border-radius: var(--radius-sm); padding: 10px 14px; margin-top: 14px; }
+
+.about-card .glossary { margin: 0; }
+.about-card .glossary dt {
+  font-weight: 700; color: var(--ink); font-size: 0.92rem;
+  margin: 20px 0 4px 0; padding-top: 12px; border-top: 1px solid var(--line);
+}
+.about-card .glossary dt:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+.about-card .glossary dd { margin: 0 0 4px 0; }
+.about-card .glossary dd p { margin: 0 0 8px 0; }
+.about-card .glossary dd p:last-child { margin-bottom: 0; }
+.about-card .glossary dd ul { margin: 4px 0 8px 0; padding-left: 20px; }
+
+/* form control refinement */
+.selectize-input, .form-control { border-radius: var(--radius-sm); border-color: #e4e4e8; font-size: 0.88rem; box-shadow: none; }
+
+/* ---------- year range slider: flat track + pill handles, matching the rest
+   of the UI, instead of ionRangeSlider's default bootstrap-y skin. !important
+   is needed throughout because ion.rangeSlider.css is injected into <head> by
+   the widget itself, after this stylesheet, so it wins same-specificity ties
+   on load order alone. ---------- */
+.irs--shiny { height: 42px !important; }
+.irs--shiny .irs-line {
+  top: 22px !important; height: 4px !important; border-radius: 999px !important;
+  background: var(--line) !important; border: none !important;
+}
+.irs--shiny .irs-bar {
+  top: 22px !important; height: 4px !important; border-radius: 999px !important;
+  background: var(--accent) !important; border: none !important; box-shadow: none !important;
+}
+.irs--shiny .irs-handle {
+  top: 15px !important; width: 16px !important; height: 16px !important; border-radius: 50% !important;
+  background: #fff !important; border: 2px solid var(--accent) !important;
+  box-shadow: 0 1px 3px rgba(16, 16, 20, 0.18) !important; cursor: grab;
+}
+.irs--shiny .irs-handle i { display: none !important; }
+.irs--shiny .irs-handle:hover,
+.irs--shiny .irs-handle.state_hover,
+.irs--shiny .irs-handle.type_last {
+  border-color: var(--accent) !important; box-shadow: 0 0 0 4px var(--accent-soft) !important;
+}
+.irs--shiny .irs-handle:active { cursor: grabbing; }
+.irs--shiny .irs-min, .irs--shiny .irs-max { display: none !important; }
+.irs--shiny .irs-from, .irs--shiny .irs-to, .irs--shiny .irs-single {
+  top: -4px !important; padding: 3px 9px !important; border-radius: 999px !important;
+  background: var(--ink) !important; border: none !important;
+  font-family: var(--sans) !important; font-size: 0.72rem !important; font-weight: 700 !important; text-shadow: none !important;
+}
+.irs--shiny .irs-from::before, .irs--shiny .irs-to::before, .irs--shiny .irs-single::before { display: none !important; }
+.irs--shiny .irs-grid { height: 26px !important; }
+.irs--shiny .irs-grid-pol { display: none !important; }
+.irs--shiny .irs-grid-text {
+  bottom: 4px !important; color: var(--muted) !important; font-family: var(--sans) !important;
+  font-size: 0.72rem !important; text-shadow: none !important;
+}
+
+/* chart typography: set via CSS, not the Highcharts theme -- see R/charts.R */
+.highcharts-container, .highcharts-root { font-family: var(--sans) !important; }
+
+/* rounded bar/column corners: the bundled Highcharts core (9.3.1) predates native
+   column borderRadius support (added in 10.3), so this is done via the SVG `rx`
+   geometry property directly on each bar's <rect> instead. */
+.highcharts-column-series .highcharts-point,
+.highcharts-bar-series .highcharts-point { rx: 2px; ry: 2px; }
+
+table.dataTable { font-size: 0.82rem; }
