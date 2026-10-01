@@ -131,10 +131,63 @@ mod_merger_server <- function(id, data, all_countries, all_sectors, all_years, g
       }
     })
 
+    # Every Company N input id currently on screen, in slot order (company_1
+    # first, always present through however many extra slots exist).
+    slot_ids <- reactive({
+      k <- n_extra()
+      c("company_1", "company_2", if (k > 0) paste0("company_", seq_len(k) + 2) else character(0))
+    })
+
+    # Which countries each company operates in, for the selected year -- the
+    # raw material for narrowing later Company N pickers down to companies
+    # that could still end up overlapping with what's already picked.
+    company_countries_map <- reactive({
+      req(input$year)
+      rc <- rev_col()
+      d <- data$unified[data$unified$Year == as.numeric(input$year), , drop = FALSE]
+      d <- d[!d$is_aggregate & !is.na(d$parent) & d$parent != "" & d$parent != "nan" &
+               !is.na(d[[rc]]) & d[[rc]] > 0, , drop = FALSE]
+      split(d$Country, d$parent)
+    })
+
+    # Company 1 always offers every company. Each picker after that is
+    # narrowed to companies that operate in at least one country shared by
+    # *every* company already picked before it -- so a choice made here can
+    # never rule out finding some overlap later, though it may still narrow
+    # to zero once sectors are taken into account.
+    #
+    # One observer per possible slot index (fixed at MERGER_MAX_COMPANIES,
+    # not per currently-visible slot), each depending ONLY on the slots
+    # strictly before it -- never on its own current value. A single shared
+    # observer that read every slot's value up front was simpler, but a
+    # dependency taken for a *later* slot's sake (e.g. company_3 needing to
+    # watch company_2) also made that same observer re-fire on company_2's
+    # own changes, which re-ran company_2's block and reset company_2 to
+    # empty the moment a user picked it. isolate() below reads a slot's own
+    # value without creating that dependency.
+    lapply(2:MERGER_MAX_COMPANIES, function(idx) {
+      observe({
+        ids <- slot_ids()
+        req(idx <= length(ids))
+        cmap <- company_countries_map()
+        all_choices <- all_parent_names()
+        prior <- unlist(lapply(ids[seq_len(idx - 1)], function(i) input[[i]]))
+        prior <- prior[!is.null(prior) & nzchar(prior)]
+        choices <- if (length(prior) == 0) {
+          all_choices
+        } else {
+          allowed <- Reduce(intersect, lapply(prior, function(p) cmap[[p]] %||% character(0)))
+          Filter(function(p) length(intersect(cmap[[p]] %||% character(0), allowed)) > 0, all_choices)
+        }
+        cur <- isolate(input[[ids[idx]]])
+        keep_selected <- if (!is.null(cur) && nzchar(cur) && cur %in% choices) cur else character(0)
+        updateSelectizeInput(session, ids[idx], choices = choices, selected = keep_selected, server = TRUE)
+      })
+    })
+
     # Every non-empty Company N input, in order, deduplicated.
     selected_companies <- reactive({
-      k <- n_extra()
-      ids <- c("company_1", "company_2", if (k > 0) paste0("company_", seq_len(k) + 2) else character(0))
+      ids <- slot_ids()
       vals <- unlist(lapply(ids, function(i) input[[i]]))
       vals <- vals[!is.null(vals) & nzchar(vals)]
       unique(vals)
@@ -253,31 +306,6 @@ mod_merger_server <- function(id, data, all_countries, all_sectors, all_years, g
       names(tot_by_country)[which.max(tot_by_country)]
     })
 
-    # Aggregate shares across *every* overlapping market combined -- not a
-    # true global-media-economy share (there's no single coherent "world
-    # total" once countries/sectors are mixed), but the combined position of
-    # everyone appearing anywhere the selected companies overlap, against the
-    # combined total of those same markets. Small long-tail companies beyond
-    # the top 8 (the selected companies are always kept individually) are
-    # folded into "Others (residual)" for chart readability.
-    world_shares <- reactive({
-      results <- all_results()
-      req(length(results) > 0)
-      comps <- selected_companies()
-      all_shares <- bind_rows(lapply(results, function(r) r$shares))
-      agg <- all_shares %>% filter(parent != "Others (residual)") %>%
-        group_by(parent) %>% summarise(revenue = sum(revenue), .groups = "drop")
-      residual <- sum(all_shares$revenue[all_shares$parent == "Others (residual)"])
-      total <- sum(agg$revenue) + residual
-      agg$share <- agg$revenue / total * 100
-      agg <- agg %>% arrange(desc(revenue))
-      keep <- agg$parent %in% comps | seq_len(nrow(agg)) <= 8
-      kept <- agg[keep, , drop = FALSE]
-      folded <- sum(agg$revenue[!keep]) + residual
-      if (folded > 0) kept <- bind_rows(kept, data.frame(parent = "Others (residual)", revenue = folded, share = folded / total * 100))
-      kept
-    })
-
     result_stat_block <- function(res) {
       hhi_delta <- res$hhi_after - res$hhi_before
       cr4_delta <- res$cr4_after - res$cr4_before
@@ -340,17 +368,14 @@ mod_merger_server <- function(id, data, all_countries, all_sectors, all_years, g
         div(class = "panel-card panel-card-wide",
           h3(class = "panel-title", "Company shares"),
           p(class = "panel-note",
-            "Before (left) and after the simulated merger (right). Defaults to the host country -- the ",
-            "overlapping market where the selected companies' combined revenue is largest -- and the combined ",
-            "position across every overlapping market together (“World”); switch to a specific ",
-            "country/sector below to see any one market on its own. The companies being merged are highlighted."),
+            "Before (left) and after the simulated merger (right), for one overlapping country/sector at a time. ",
+            "Defaults to the host country -- the overlapping market where the selected companies' combined revenue ",
+            "is largest -- and its own biggest sector; pick any other country or sector below to see that market ",
+            "instead. The companies being merged are highlighted."),
           div(class = "panel-toolbar",
-            radioButtons(ns("share_scope"), "View",
-                         c("Host country" = "host", "World (combined across overlaps)" = "world", "Specific market" = "specific"),
-                         selected = "host", inline = TRUE),
-            uiOutput(ns("share_focus_ui"))
+            uiOutput(ns("share_country_ui")),
+            uiOutput(ns("share_sector_ui"))
           ),
-          uiOutput(ns("share_scope_label_ui")),
           div(class = "merger-share-row",
             div(class = "merger-share-col",
               h4(class = "panel-subtitle", "Before"),
@@ -362,7 +387,7 @@ mod_merger_server <- function(id, data, all_countries, all_sectors, all_years, g
             )
           ),
           h4(class = "panel-subtitle", "Revenue, before vs. after"),
-          p(class = "panel-note", "Each selected company's own revenue, compared against the combined merged entity's revenue, for the same view selected above."),
+          p(class = "panel-note", "Each selected company's own revenue, compared against the combined merged entity's revenue, for the same country/sector selected above."),
           highchartOutput(ns("chart_merger_revenue"), height = "320px"),
           downloadButton(ns("dl_merger"), "Download before/after shares for every overlapping market (CSV)", class = "dl-btn")
         ),
@@ -378,57 +403,59 @@ mod_merger_server <- function(id, data, all_countries, all_sectors, all_years, g
       )
     })
 
-    output$share_focus_ui <- renderUI({
-      req(input$share_scope == "specific")
+    # Country selector for the Company shares card -- every country where all
+    # selected companies overlap, defaulting to the host country (largest
+    # combined revenue). Kept as its own output (rather than folded into
+    # results_ui) so picking a country doesn't re-render the whole card.
+    output$share_country_ui <- renderUI({
       results <- all_results()
       req(length(results) > 0)
-      selectInput(ns("share_focus"), NULL, choices = names(results), selected = names(results)[1], width = "320px")
-    })
-
-    output$share_scope_label_ui <- renderUI({
-      lbl <- switch(input$share_scope %||% "host",
-        "host" = paste0("Host country: ", host_country()),
-        "world" = "World: combined across every overlapping market",
-        "specific" = if (!is.null(input$share_focus)) input$share_focus else ""
+      countries <- sort(unique(vapply(results, function(r) r$country, character(1))))
+      cur <- isolate(input$share_country)
+      default <- if (!is.null(cur) && cur %in% countries) cur else host_country()
+      div(class = "filter-group",
+        tags$label(class = "filter-label", "Country"),
+        selectInput(ns("share_country"), NULL, choices = countries, selected = default, width = "220px")
       )
-      div(class = "panel-scope-note", lbl)
     })
 
-    # Resolves the current scope to a (before-shares-df, after-shares-df,
-    # merged-label, market-total) tuple shared by the pie charts and the
+    # Sector selector, scoped to whichever country is currently picked above --
+    # defaults to that country's biggest overlapping sector (by the selected
+    # companies' combined revenue), same rule "host country" used before.
+    output$share_sector_ui <- renderUI({
+      req(input$share_country)
+      results <- all_results()
+      in_country <- Filter(function(r) r$country == input$share_country, results)
+      req(length(in_country) > 0)
+      ord <- order(vapply(in_country, function(r) sum(r$selected$revenue), numeric(1)), decreasing = TRUE)
+      # USE.NAMES = FALSE: in_country's list names are the full "Country —
+      # Sector" labels (inherited from all_results()), which would otherwise
+      # leak in as this vector's names -- and Shiny's selectInput treats a
+      # named choices vector's names as the *displayed* text, not the value.
+      sectors <- vapply(in_country, function(r) r$sector, character(1), USE.NAMES = FALSE)[ord]
+      cur <- isolate(input$share_sector)
+      default <- if (!is.null(cur) && cur %in% sectors) cur else sectors[1]
+      div(class = "filter-group",
+        tags$label(class = "filter-label", "Sector"),
+        selectInput(ns("share_sector"), NULL, choices = sectors, selected = default, width = "220px")
+      )
+    })
+
+    # Resolves the current country/sector pick to a (before-shares-df,
+    # after-shares-df, merged-label) tuple shared by the pie charts and the
     # revenue comparison chart below, so all three always agree.
     current_scope_data <- reactive({
       comps <- selected_companies()
-      scope <- input$share_scope %||% "host"
-      if (scope == "world") {
-        before <- world_shares()
-        merged_label <- paste(comps, collapse = " + ")
-        rest <- before[!(before$parent %in% comps), , drop = FALSE]
-        merged_share <- sum(before$share[before$parent %in% comps])
-        merged_revenue <- sum(before$revenue[before$parent %in% comps])
-        after <- bind_rows(rest[, c("parent", "share", "revenue")],
-                            data.frame(parent = merged_label, share = merged_share, revenue = merged_revenue))
-        list(before = before, after = after, merged_label = merged_label)
-      } else {
-        results <- all_results()
-        req(length(results) > 0)
-        lbl <- if (scope == "specific") {
-          req(input$share_focus); input$share_focus
-        } else {
-          hc <- host_country()
-          # Largest single sector within the host country, for the pies --
-          # matches "host country" being about where combined revenue is
-          # biggest, not any one sector in particular.
-          in_host <- Filter(function(r) r$country == hc, results)
-          in_host[[which.max(vapply(in_host, function(r) sum(r$selected$revenue), numeric(1)))]]$label
-        }
-        res <- results[[lbl]]
-        req(!is.null(res))
-        merged_label <- paste(comps, collapse = " + ")
-        after <- bind_rows(res$rest[, c("parent", "share", "revenue")],
-                            data.frame(parent = merged_label, share = res$merged_share, revenue = sum(res$selected$revenue)))
-        list(before = res$shares, after = after, merged_label = merged_label)
-      }
+      req(input$share_country, input$share_sector)
+      results <- all_results()
+      req(length(results) > 0)
+      lbl <- paste0(input$share_country, " — ", input$share_sector)
+      res <- results[[lbl]]
+      req(!is.null(res))
+      merged_label <- paste(comps, collapse = " + ")
+      after <- bind_rows(res$rest[, c("parent", "share", "revenue")],
+                          data.frame(parent = merged_label, share = res$merged_share, revenue = sum(res$selected$revenue)))
+      list(before = res$shares, after = after, merged_label = merged_label)
     })
 
     pie_chart <- function(df, highlight_label, comps) {
