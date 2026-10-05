@@ -368,10 +368,7 @@ mod_merger_server <- function(id, data, all_countries, all_sectors, all_years, g
         div(class = "panel-card panel-card-wide",
           h3(class = "panel-title", "Company shares"),
           p(class = "panel-note",
-            "Before (left) and after the simulated merger (right), for one overlapping country/sector at a time. ",
-            "Defaults to the host country -- the overlapping market where the selected companies' combined revenue ",
-            "is largest -- and its own biggest sector; pick any other country or sector below to see that market ",
-            "instead. The companies being merged are highlighted."),
+            "Before (left) and after the simulated merger (right), for one overlapping country/sector at a time."),
           div(class = "panel-toolbar",
             uiOutput(ns("share_country_ui")),
             uiOutput(ns("share_sector_ui"))
