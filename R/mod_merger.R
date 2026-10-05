@@ -348,10 +348,16 @@ mod_merger_server <- function(id, data, all_countries, all_sectors, all_years, g
       div(class = "panel-card",
         h4(class = "panel-title", country),
         p(class = "panel-note", length(results_for_country), " affected sector", if (length(results_for_country) != 1) "s" else "", " in ", country, "."),
-        h4(class = "panel-subtitle", "HHI (Herfindahl-Hirschman Index), before vs. after"),
-        conc_compare_chart(results_for_country, "hhi"),
-        h4(class = "panel-subtitle", "CR4 (4-firm concentration ratio), before vs. after"),
-        conc_compare_chart(results_for_country, "cr4")
+        div(class = "merger-share-row",
+          div(class = "merger-share-col",
+            h4(class = "panel-subtitle", "HHI (Herfindahl-Hirschman Index), before vs. after"),
+            conc_compare_chart(results_for_country, "hhi")
+          ),
+          div(class = "merger-share-col",
+            h4(class = "panel-subtitle", "CR4 (4-firm concentration ratio), before vs. after"),
+            conc_compare_chart(results_for_country, "cr4")
+          )
+        )
       )
     }
 
