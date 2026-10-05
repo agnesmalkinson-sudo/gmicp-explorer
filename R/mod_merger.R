@@ -306,40 +306,40 @@ mod_merger_server <- function(id, data, all_countries, all_sectors, all_years, g
       names(tot_by_country)[which.max(tot_by_country)]
     })
 
-    result_stat_block <- function(res) {
-      hhi_delta <- res$hhi_after - res$hhi_before
-      cr4_delta <- res$cr4_after - res$cr4_before
-      hhi_before_color <- concentration_band_color(res$hhi_before, "hhi")
-      hhi_after_color <- concentration_band_color(res$hhi_after, "hhi")
-      cr4_before_color <- concentration_band_color(res$cr4_before, "cr4")
-      cr4_after_color <- concentration_band_color(res$cr4_after, "cr4")
-      div(class = "merger-result-block",
-        h4(class = "panel-subtitle", res$sector),
-        div(class = "stat-strip",
-          stat_card(
-            value = tagList(
-              span(style = paste0("color:", hhi_before_color), format(round(res$hhi_before), big.mark = ",")),
-              " → ",
-              span(style = paste0("color:", hhi_after_color), format(round(res$hhi_after), big.mark = ","))
-            ),
-            label = "HHI (Herfindahl-Hirschman Index)",
-            detail = paste0("Δ ", if (hhi_delta >= 0) "+" else "", format(round(hhi_delta), big.mark = ","),
-                             " · before figure: ", res$hhi_source),
-            icon = "graph-up-arrow"
-          ),
-          stat_card(
-            value = tagList(
-              span(style = paste0("color:", cr4_before_color), paste0(round(res$cr4_before, 1), "%")),
-              " → ",
-              span(style = paste0("color:", cr4_after_color), paste0(round(res$cr4_after, 1), "%"))
-            ),
-            label = "CR4 (4-firm concentration ratio)",
-            detail = paste0("Δ ", if (cr4_delta >= 0) "+" else "", round(cr4_delta, 1),
-                             " pts · before figure: ", res$cr4_source),
-            icon = "pie-chart"
-          )
-        )
-      )
+    # Before/after bars for one metric ("hhi" or "cr4") across every affected
+    # sector in a country. Dashed lines mark the DOJ/FTC band cutoffs (same
+    # breaks as the heatmap); the tooltip carries the delta and whether the
+    # "before" figure is GMICP's published metric or this tool's estimate.
+    conc_compare_chart <- function(results_for_country, mc) {
+      is_hhi <- mc == "hhi"
+      before <- vapply(results_for_country, function(r) if (is_hhi) r$hhi_before else r$cr4_before, numeric(1), USE.NAMES = FALSE)
+      after <- vapply(results_for_country, function(r) if (is_hhi) r$hhi_after else r$cr4_after, numeric(1), USE.NAMES = FALSE)
+      src <- vapply(results_for_country, function(r) if (is_hhi) r$hhi_source else r$cr4_source, character(1), USE.NAMES = FALSE)
+      secs <- vapply(results_for_country, function(r) r$sector, character(1), USE.NAMES = FALSE)
+      pts <- function(vals, with_delta) lapply(seq_along(vals), function(i) {
+        list(y = round(vals[i], 1), delta = round(after[i] - before[i], 1), src = src[i])
+      })
+      breaks <- concentration_band_breaks(mc)
+      lines <- lapply(breaks, function(b) list(value = b, color = "#9AA0A6", dashStyle = "Dash", width = 1,
+                                               zIndex = 3, label = list(text = format(b, big.mark = ","), style = list(color = "#6B7280", fontSize = "10px"))))
+      ymax <- max(c(before, after, breaks), na.rm = TRUE) * 1.08
+      highchart() %>%
+        hc_chart(type = "column", height = 300) %>%
+        hc_xAxis(categories = as.list(secs), title = list(text = "")) %>%
+        hc_yAxis(title = list(text = if (is_hhi) "HHI" else "CR4 (%)"), min = 0, max = if (is_hhi) ymax else min(100, ymax),
+                 plotLines = lines, labels = list(format = "{value:,.0f}")) %>%
+        hc_add_series(name = "Before", data = pts(before), color = "#6C5CE7") %>%
+        hc_add_series(name = "After merger", data = pts(after), color = "#F2618C") %>%
+        hc_tooltip(shared = FALSE, useHTML = TRUE, formatter = JS(sprintf(r"(function() {
+          var p = this.point, d = p.delta, u = '%s';
+          var extra = this.series.name === 'After merger'
+            ? '<br/>Change: <b>' + (d >= 0 ? '+' : '') + Highcharts.numberFormat(d, 1) + u + '</b>'
+            : '<br/><span style="color:#6B7280">' + p.src + '</span>';
+          return '<b>' + this.x + '</b><br/>' + this.series.name + ': <b>' +
+            Highcharts.numberFormat(p.y, %d) + (u === ' pts' ? '%%' : '') + '</b>' + extra;
+        })", if (is_hhi) "" else " pts", if (is_hhi) 0L else 1L))) %>%
+        hc_legend(enabled = TRUE) %>%
+        apply_gmicp_theme()
     }
 
     # One card per country, with every affected sector's HHI/CR4 stat blocks
@@ -348,7 +348,10 @@ mod_merger_server <- function(id, data, all_countries, all_sectors, all_years, g
       div(class = "panel-card",
         h4(class = "panel-title", country),
         p(class = "panel-note", length(results_for_country), " affected sector", if (length(results_for_country) != 1) "s" else "", " in ", country, "."),
-        tagList(lapply(results_for_country, result_stat_block))
+        h4(class = "panel-subtitle", "HHI (Herfindahl-Hirschman Index), before vs. after"),
+        conc_compare_chart(results_for_country, "hhi"),
+        h4(class = "panel-subtitle", "CR4 (4-firm concentration ratio), before vs. after"),
+        conc_compare_chart(results_for_country, "cr4")
       )
     }
 
